@@ -1,10 +1,10 @@
-**About**
+*About*
 
 Very simple tkinter Python app for competitive programming or interview prep questions. Features include adding/editing problems and contests, a timer, and some analytical insights.
 
 Send me a pull request or issue if you want any new features.
 
-**Getting Started**
+*Getting Started*
 
 Just run these commands if it's your first time using this.
 ```
