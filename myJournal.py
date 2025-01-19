@@ -223,7 +223,7 @@ class CPJournalGUI:
         self.timer_id = None
 
         #Template code - underneath timer
-        with open("./coding/template.cpp", "r") as f:
+        with open("template.cpp", "r") as f:
             self.template_code = f.read()
 
         self.template_text = tk.Text(cpp_frame, width=30, height=20)
