@@ -31,7 +31,7 @@ class CPJournalGUI:
         self.notebook.pack(expand=True, fill='both', padx=10, pady=5)
         
         # Create tabs
-        self.create_add_contest_tab()
+        self.create_add_entry_tab()
         self.create_edit_entry_tab()
         self.create_stats_tab()
         self.create_search_tab()
@@ -39,6 +39,7 @@ class CPJournalGUI:
         self.create_timer_tab()
         self.create_cpp_testing_tab()
         self.create_contests_tab()
+        
         
 
         
@@ -63,7 +64,7 @@ class CPJournalGUI:
         with open(self.contestsfile, 'w') as f:
             json.dump(self.contests, f, indent=2)
             
-    def create_add_contest_tab(self):
+    def create_add_entry_tab(self):
         contest_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(contest_frame, text="Add Contest/Problem")
 
@@ -87,6 +88,10 @@ class CPJournalGUI:
         
         self.passed_var = tk.BooleanVar()
         ttk.Checkbutton(contest_frame, text="Passed", variable=self.passed_var).grid(row=4, column=1, sticky='w', pady=5)
+
+        self.solved_in_contest_var = tk.BooleanVar()
+        ttk.Checkbutton(contest_frame, text="Solved in contest", variable=self.solved_in_contest_var).grid(row=4, column=0, sticky='w', pady=5)
+
         
         ttk.Label(contest_frame, text="Learnings:").grid(row=5, column=0, sticky='w', pady=5)
         self.learnings = scrolledtext.ScrolledText(contest_frame, width=40, height=5)
@@ -96,13 +101,18 @@ class CPJournalGUI:
         self.link = ttk.Entry(contest_frame, width=40)
         self.link.grid(row=6, column=1, sticky='w', pady=5)
 
+        #Number of attempts
+        ttk.Label(contest_frame, text="Number of Attempts").grid(row=7, column=0, sticky='w', pady=5)
+        self.num_attempts = ttk.Entry(contest_frame, width=40)
+        self.num_attempts.grid(row=7, column=1, sticky='w', pady=5)
+
         # Contest id (leave blank if not part of a contest)
-        ttk.Label(contest_frame, text="Contest ID (leave blank if no contest):").grid(row=7, column=0, sticky='w', pady=5)
+        ttk.Label(contest_frame, text="Contest ID (leave blank if no contest):").grid(row=8, column=0, sticky='w', pady=5)
         self.contest_id = ttk.Entry(contest_frame, width=40)
-        self.contest_id.grid(row=7, column=1, sticky='w', pady=5)
+        self.contest_id.grid(row=8, column=1, sticky='w', pady=5)
 
         
-        ttk.Button(contest_frame, text="Save Entry", command=self.save_entry, style='primary.TButton').grid(row=8, column=1, sticky='w', pady=20)
+        ttk.Button(contest_frame, text="Save Entry", command=self.save_entry, style='primary.TButton').grid(row=9, column=1, sticky='w', pady=20)
 
         #Contest specific fields
         ttk.Label(contest_frame, text="Contest Name:").grid(row=0, column=3, sticky='w', pady=5)
@@ -370,6 +380,9 @@ class CPJournalGUI:
         self.contest_stats_text.config(state='disabled')
         
         self.update_stats()
+
+        # Bind the event to update tabs on selection
+        self.notebook.bind("<<NotebookTabChanged>>", self.update_stats)
         
     def create_search_tab(self):
         self.search_frame = ttk.Frame(self.notebook, padding="10")
@@ -383,10 +396,6 @@ class CPJournalGUI:
         self.search_entry.pack(side='left', padx=5)
         
         ttk.Button(search_box_frame, text="Search", command=self.perform_search, style='primary.TButton').pack(side='left', padx=5)
-        
-        # Results area
-        self.search_results = scrolledtext.ScrolledText(self.search_frame, width=70, height=30)
-        self.search_results.pack(expand=True, fill='both', pady=5, side='left')   
 
     def create_edit_entry_tab(self):
         edit_frame = ttk.Frame(self.notebook, padding="10")
@@ -519,11 +528,14 @@ class CPJournalGUI:
                 "difficulty": self.difficulty.get(),
                 "topics": [t.strip() for t in self.topics.get().split(",")],
                 "passed": self.passed_var.get(),
+                "solved_in_contest": self.solved_in_contest_var.get(),
                 "time_spent": self.time_spent.get(),
                 "learnings": self.learnings.get("1.0", tk.END).strip(),
                 "link": self.link.get(),
+                "num_attempts": self.num_attempts.get(),
                 "problem_id": len(self.problems)+1,
                 "contest_id": self.contest_id.get() if self.contest_id.get() else 0
+
             }
             
             #add problem to contest if applicable
@@ -544,6 +556,8 @@ class CPJournalGUI:
             self.passed_var.set(False)
             self.learnings.delete("1.0", tk.END)
             self.link.delete(0, tk.END)
+            self.contest_id.delete(0, tk.END)
+            self.solved_in_contest_var.set(False)
             
             messagebox.showinfo("Success", "Entry saved successfully!")
             self.update_stats()
@@ -657,34 +671,73 @@ class CPJournalGUI:
         
     def perform_search(self):
         keyword = self.search_entry.get().lower()
-        self.search_results.delete("1.0", tk.END)
         
         matching_problems = []
         for entry in self.problems:
             if (keyword in entry["problem_name"].lower() or
-                any(keyword in topic.lower() for topic in entry["topics"])):
+            any(keyword in topic.lower() for topic in entry["topics"])):
                 matching_problems.append(entry)
         
         if matching_problems:
-            for entry in matching_problems:
-                result_text = f"""
-Date: {entry['date']}
-Problem: {entry['problem_name']}
-Difficulty: {entry['difficulty']}
-Topics: {', '.join(entry['topics'])}
-Passed: {'Yes' if entry['passed'] else 'No'}
-Time spent: {entry['time_spent']} minutes
-Learnings: {entry['learnings']}
-Link: {entry['link']} 
-Contest ID: {entry['contest_id']}
-Problem ID: {entry['problem_id']}
-{'-' * 50}
-"""
-                self.search_results.insert(tk.END, result_text)
-        else:
-            self.search_results.insert(tk.END, "No matching problems found.")
+            # Create a canvas and a scrollbar
+            canvas = tk.Canvas(self.search_frame)
+            scrollbar = ttk.Scrollbar(self.search_frame, orient="vertical", command=canvas.yview)
+            scrollable_frame = ttk.Frame(canvas)
 
-        self.update_edit_buttons()
+            scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+            )
+
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            # Make frame scrollable with trackpad or mousewheel
+            def _on_mousewheel(event):
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+                canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+            for entry in matching_problems:
+                left_text = f"""
+    Date: {entry['date']}
+    Problem: {entry['problem_name']}
+    Difficulty: {entry['difficulty']}
+    Topics: {', '.join(entry['topics'])}
+    Passed: {'Yes' if entry['passed'] else 'No'}
+    Solved in Contest: {'Yes' if entry['solved_in_contest'] else 'No'}
+    Time spent: {entry['time_spent']} minutes
+    Number of Attempts: {entry['num_attempts']}
+    Link: {entry['link']} 
+    """
+                right_text = f"""
+    Contest ID: {entry['contest_id']}
+    Problem ID: {entry['problem_id']}
+    Learnings: {entry['learnings']}
+    """
+                
+                left_label = ttk.Label(scrollable_frame, text=left_text, anchor='nw', wraplength=int(self.root.winfo_screenwidth() / 2.1))
+                right_label = ttk.Label(scrollable_frame, text=right_text, anchor='nw', wraplength=int(self.root.winfo_screenwidth() / 2.1))
+
+                left_label.grid(row=matching_problems.index(entry) * 2, column=0, sticky='w', pady=0)
+                right_label.grid(row=matching_problems.index(entry) * 2, column=1, sticky='w', pady=0)
+
+                # Make divider between entries - don't wrap
+                ttk.Label(scrollable_frame, text="-" * 200).grid(row=matching_problems.index(entry) * 2 + 1, column=0, columnspan=2, sticky='nsew', pady=0)
+
+                # Enforce that each cell in the grid is the same size
+                scrollable_frame.grid_columnconfigure(0, weight=1)
+                scrollable_frame.grid_columnconfigure(1, weight=1)
+                scrollable_frame.grid_rowconfigure(matching_problems.index(entry), weight=1)
+                scrollable_frame.grid_rowconfigure(matching_problems.index(entry) + 1, weight=0)
+
+        else:
+            no_match_label = ttk.Label(self.search_frame, text="No matching entries found.")
+            no_match_label.pack(pady=10)
 
     def create_contests_tab(self):
         contests_frame = ttk.Frame(self.notebook, padding="10")
